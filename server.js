@@ -1,4 +1,4 @@
-// backend/src/index.js
+// backend/server.js
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -17,37 +17,29 @@ const io = new Server(server, {
   },
 });
 
-// In-memory poll state
+// Current poll state stored in memory
 let currentPoll = null;
 
 io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+  console.log("New client connected:", socket.id);
 
-  // backend/src/index.js or server.js (inside io.on("connection"))
-socket.on("teacher:kickStudent", ({ socketId }) => {
-  const clientSocket = io.sockets.sockets.get(socketId);
-  if (clientSocket) {
-    clientSocket.emit("student:kicked");
-    clientSocket.disconnect(); // optional: disconnect the student
-  }
-});
-
-  // Send current poll to new client
+  // Send the current poll to a newly connected client
   if (currentPoll) {
     socket.emit("newPoll", currentPoll);
   }
 
   // Teacher posts a new poll
   socket.on("postPoll", (pollData) => {
-    currentPoll = { ...pollData, answers: [] }; // reset answers for each new poll
-    io.emit("newPoll", currentPoll);
+    currentPoll = { ...pollData, answers: [] }; // reset answers for new poll
+    io.emit("newPoll", currentPoll); // broadcast to all clients
     console.log("Poll posted:", currentPoll);
   });
 
-  // Student submits answer
+  // Student submits an answer
   socket.on("submitAnswer", ({ studentName, answer }) => {
     if (!currentPoll) return;
 
+    // Prevent duplicate answers by same student
     const existingIndex = currentPoll.answers.findIndex(
       (a) => a.studentName === studentName
     );
@@ -58,6 +50,7 @@ socket.on("teacher:kickStudent", ({ socketId }) => {
       currentPoll.answers.push({ studentName, answer });
     }
 
+    // Broadcast updated poll results
     io.emit("updateResults", currentPoll);
     console.log("Answer submitted:", { studentName, answer });
   });
@@ -67,9 +60,9 @@ socket.on("teacher:kickStudent", ({ socketId }) => {
   });
 });
 
-// Use static port (avoiding process.env issues during frontend linting)
+// Set static port (no process.env to avoid errors in frontend linting)
 const PORT = 4000;
 
 server.listen(PORT, () => {
-  console.log(`Backend running at http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
